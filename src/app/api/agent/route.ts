@@ -3,7 +3,7 @@ import { runAgentStep } from "@/lib/ai/gemini";
 import type { AgentContent } from "@/lib/ai/types";
 
 export async function POST(request: Request) {
-  let body: { history?: AgentContent[] };
+  let body: { history?: AgentContent[]; toolNames?: string[] };
   try {
     body = await request.json();
   } catch {
@@ -20,6 +20,10 @@ export async function POST(request: Request) {
     );
   }
 
+  const toolNames = Array.isArray(body.toolNames) && body.toolNames.every((n) => typeof n === "string")
+    ? body.toolNames
+    : undefined;
+
   if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json(
       {
@@ -34,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const step = await runAgentStep(body.history);
+    const step = await runAgentStep(body.history, toolNames);
     return NextResponse.json({ success: true, data: step });
   } catch (error) {
     return NextResponse.json(

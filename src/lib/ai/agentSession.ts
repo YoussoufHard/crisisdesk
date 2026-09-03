@@ -9,6 +9,7 @@ export interface AgentSessionState {
   errorMessage: string | null;
   startedAt: string | null;
   iterations: number;
+  note: string | null;
 }
 
 const initialState: AgentSessionState = {
@@ -18,6 +19,7 @@ const initialState: AgentSessionState = {
   errorMessage: null,
   startedAt: null,
   iterations: 0,
+  note: null,
 };
 
 type Listener = () => void;
@@ -46,19 +48,24 @@ class AgentSessionStore {
       errorMessage: null,
       startedAt: new Date().toISOString(),
       iterations: 0,
+      note: null,
     });
   }
 
   incrementIteration() {
-    this.set({ iterations: this.state.iterations + 1 });
+    this.set({ iterations: this.state.iterations + 1, note: null });
+  }
+
+  setNote(note: string | null) {
+    this.set({ note });
   }
 
   setFinal(text: string) {
-    this.set({ status: "done", finalText: text });
+    this.set({ status: "done", finalText: text, note: null });
   }
 
   setError(message: string) {
-    this.set({ status: "error", errorMessage: message });
+    this.set({ status: "error", errorMessage: message, note: null });
   }
 
   reset() {

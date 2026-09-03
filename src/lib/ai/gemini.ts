@@ -5,8 +5,9 @@ import type { AgentContent, AgentStepResponse } from "./types";
 
 const DEFAULT_MODEL = "gemini-3.6-flash";
 
-function toFunctionDeclarations(): FunctionDeclaration[] {
-  return TOOL_DEFINITIONS.map((def) => ({
+function toFunctionDeclarations(toolNames?: string[]): FunctionDeclaration[] {
+  const defs = toolNames ? TOOL_DEFINITIONS.filter((d) => toolNames.includes(d.name)) : TOOL_DEFINITIONS;
+  return defs.map((def) => ({
     name: def.name,
     description: def.description,
     parametersJsonSchema: def.inputSchema,
@@ -24,18 +25,40 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
-const RATE_LIMIT_RETRY_DELAYS_MS = [3000, 6000];
+const MAX_RATE_LIMIT_RETRIES = 5;
+const FALLBACK_RETRY_DELAYS_MS = [4000, 8000, 15000, 20000, 20000];
+const MAX_RETRY_DELAY_MS = 25000;
 
 function isRateLimitError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return message.includes("RESOURCE_EXHAUSTED") || message.includes('"code":429') || message.includes("rate limit");
 }
 
+/**
+ * A per-day quota (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`) won't
+ * reset within any reasonable retry window, even though the API's own
+ * `retryDelay` hint on that error is a short, generic backoff value (not an
+ * actual reset time). Retrying it is pure wasted time — fail fast instead
+ * with a message that says what's actually going on.
+ */
+function isDailyQuotaError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("PerDay");
+}
+
+/** The API tells us exactly how long to wait (e.g. `"retryDelay":"5.8s"`) — prefer that over guessing. */
+function parseRetryDelayMs(error: unknown): number | null {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = message.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/);
+  if (!match) return null;
+  return Math.min(Math.ceil(parseFloat(match[1]) * 1000) + 500, MAX_RETRY_DELAY_MS);
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function runAgentStep(history: AgentContent[]): Promise<AgentStepResponse> {
+export async function runAgentStep(history: AgentContent[], toolNames?: string[]): Promise<AgentStepResponse> {
   const ai = getClient();
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
@@ -48,14 +71,20 @@ export async function runAgentStep(history: AgentContent[]): Promise<AgentStepRe
         contents: history as unknown as Content[],
         config: {
           systemInstruction: SYSTEM_PROMPT,
-          tools: [{ functionDeclarations: toFunctionDeclarations() }],
+          tools: [{ functionDeclarations: toFunctionDeclarations(toolNames) }],
           toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
         },
       });
       break;
     } catch (error) {
-      if (isRateLimitError(error) && attempt < RATE_LIMIT_RETRY_DELAYS_MS.length) {
-        await sleep(RATE_LIMIT_RETRY_DELAYS_MS[attempt]);
+      if (isRateLimitError(error) && isDailyQuotaError(error)) {
+        throw new Error(
+          "The Gemini free-tier daily quota for this model has been used up. It resets on Google's schedule (typically ~24h) — try again later, or use an API key with a higher quota.",
+        );
+      }
+      if (isRateLimitError(error) && attempt < MAX_RATE_LIMIT_RETRIES) {
+        const delay = parseRetryDelayMs(error) ?? FALLBACK_RETRY_DELAYS_MS[attempt] ?? MAX_RETRY_DELAY_MS;
+        await sleep(delay);
         attempt += 1;
         continue;
       }

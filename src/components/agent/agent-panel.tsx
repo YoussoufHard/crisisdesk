@@ -53,7 +53,8 @@ export function AgentPanel({ incident }: { incident: IncidentState }) {
               Investigating {incident.id}
               {pendingApproval && <span className="text-amber-500">· awaiting your approval</span>}
             </div>
-            <Progress value={Math.min(95, (session.iterations / 10) * 100)} className="h-1" />
+            <Progress value={Math.min(95, (calls.length / 12) * 100)} className="h-1" />
+            {session.note && <div className="text-xs text-amber-500">{session.note}</div>}
           </div>
         )}
 

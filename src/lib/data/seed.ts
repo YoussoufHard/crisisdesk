@@ -250,6 +250,27 @@ export function createInitialSnapshot(nowMs: number = Date.now()): SimulationSna
     ],
     "checkout-api": [
       {
+        id: "log-chk-db-1",
+        timestamp: isoMinutesAgo(nowMs, 22),
+        service: "checkout-api",
+        severity: "WARN",
+        message: "DB connection pool utilization at 82% (order-db, max 50 connections)",
+      },
+      {
+        id: "log-chk-db-2",
+        timestamp: isoMinutesAgo(nowMs, 18),
+        service: "checkout-api",
+        severity: "ERROR",
+        message: "Connection acquisition timeout: order-db pool exhausted, waited 5000ms",
+      },
+      {
+        id: "log-chk-db-3",
+        timestamp: isoMinutesAgo(nowMs, 15),
+        service: "checkout-api",
+        severity: "ERROR",
+        message: "DB connection pool utilization at 94% (order-db, max 50 connections)",
+      },
+      {
         id: "log-chk-1",
         timestamp: isoMinutesAgo(nowMs, 10),
         service: "checkout-api",

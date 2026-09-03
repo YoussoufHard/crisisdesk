@@ -42,6 +42,45 @@ Open http://localhost:3000.
   server snapshot — this avoids SSR/client hydration mismatches for state that
   is inherently browser-only (WebMCP tools execute in the browser).
 
+## Gemini free-tier rate limits
+
+The free tier for `gemini-3.6-flash` enforces two separate caps, discovered
+by hitting both during development:
+
+- **5 `generateContent` requests per minute** per project
+- **20 `generateContent` requests per day** per project (this is the binding
+  one in practice)
+
+A naive agent loop that asks Gemini to decide every single tool call one at a
+time burns ~10 requests on a *single* investigation — at 20/day, that's two
+investigations before the key is dead for the rest of the day. So
+`lib/ai/orchestrator.ts` does not do that:
+
+1. It fetches every read-only tool result itself first (`get_incident`,
+   `get_service_status`, `get_recent_deployments`, `get_logs`, `get_metrics`,
+   `get_dependencies` for each affected service) — still real WebMCP tool
+   calls, still visible in Agent Activity, just sequenced by the client
+   instead of decided one-by-one by the model. There's no real judgment call
+   in "should I fetch this incident's logs" for a given incident, so nothing
+   is lost by not asking.
+2. It makes **exactly one** Gemini call with all of that evidence attached,
+   restricted to the three analysis tools (`correlate_evidence`,
+   `create_root_cause_hypothesis`, `create_remediation_plan`), asking the
+   model to call all three plus produce its text summary in the same turn.
+3. If a plan comes back, it calls `execute_remediation` for the first step
+   itself (still gated by human approval as always) — no second Gemini call
+   needed, since attempting the recommended fix was already the model's
+   evident intent.
+
+Net effect: **one Gemini request per full investigation** instead of ~10 —
+20 investigations/day instead of ~2. `lib/ai/gemini.ts` still retries on a
+per-minute 429 (parsing the API's `retryDelay` hint), but fails fast with a
+clear message on a per-day quota error instead of retrying pointlessly (that
+quota doesn't reset within any retry window worth waiting for).
+
+If you're on a paid Gemini tier, none of this hurts — it's just fewer, denser
+requests either way.
+
 ## Testing an incident scenario by hand
 
 The four seeded incidents (`INC-1042`, `INC-1041`, `INC-1039`, `INC-1037`) are

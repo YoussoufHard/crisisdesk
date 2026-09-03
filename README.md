@@ -8,6 +8,8 @@ structured evidence, forms a root-cause hypothesis, proposes a remediation
 plan, and — with explicit human approval — executes it. Built for the
 [OpenAI WebMCP Challenge](https://webmcp.devpost.com/).
 
+**Live demo:** [crisisdesk-webmcp.vercel.app](https://crisisdesk-webmcp.vercel.app)
+
 ## 1. What is CrisisDesk?
 
 A payment API is degrading in production. Instead of manually checking five
@@ -109,10 +111,18 @@ for the local WebMCP polyfill. See `docs/development.md`.
 
 ## 11. Deployment
 
-Deploys to Netlify with zero extra configuration — Netlify auto-detects
-Next.js and installs `@netlify/plugin-nextjs` (also pinned explicitly in
-`netlify.toml`). Set `GEMINI_API_KEY` in the Netlify site's environment
-variables.
+Live at **[crisisdesk-webmcp.vercel.app](https://crisisdesk-webmcp.vercel.app)**,
+deployed on Vercel (zero-config for Next.js). `GEMINI_API_KEY` and
+`GEMINI_MODEL` are set as encrypted production environment variables.
+
+The app is also deployable to Netlify — `netlify.toml` pins
+`@netlify/plugin-nextjs` — but Netlify's local-build CLI path
+(`netlify deploy --build`) currently fails on Windows with "Failed publishing
+static content", a reproducible upstream issue tied to the account lacking
+`SeCreateSymbolicLinkPrivilege` (Windows Developer Mode off). Deploying via a
+Netlify-linked GitHub repo (server-side Linux build) avoids this; per the
+hackathon rules, any host is acceptable (ChatGPT Sites, Cloudflare, Vercel,
+Render, Netlify, or otherwise), so this build ships on Vercel instead.
 
 ## 12. Limitations
 

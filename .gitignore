@@ -43,3 +43,9 @@ next-env.d.ts
 
 # Claude Code session runtime state (not project config)
 .claude/scheduled_tasks.lock
+
+# Local Netlify folder
+.netlify
+
+.vercel
+.env*
